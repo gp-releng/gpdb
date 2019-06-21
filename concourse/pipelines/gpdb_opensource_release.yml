@@ -317,6 +317,7 @@ jobs:
       name: release_artifacts/name
       tag: release_artifacts/tag
       body: release_artifacts/body
+      commitish: release/commitish
       globs:
         - release_artifacts/*.tar.gz
         - release_artifacts/*.zip

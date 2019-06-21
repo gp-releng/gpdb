@@ -30,6 +30,7 @@ function create_github_release_metadata(){
     echo "${GPDB_RELEASE_TAG}" > "release_artifacts/name"
     echo "${GPDB_RELEASE_TAG}" > "release_artifacts/tag"
     echo "Greenplum-db version: ${GPDB_RELEASE_TAG}" > "release_artifacts/body"
+    echo "${GPDB_RELEASE_COMMIT_SHA}" > release/commitish
 }
 
 function _main(){
