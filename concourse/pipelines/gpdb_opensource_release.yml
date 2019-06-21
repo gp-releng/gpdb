@@ -112,6 +112,13 @@ resources:
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: greenplum-oss-server/released/gpdb6/server-(.*)-ubuntu18.04_x86_64.tar.gz
 
+- name: gpdb_debian_package
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-for-oss))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: greenplum-oss-server/released/gpdb6/greenplum-db-(.*)-ubuntu18.04-amd64.deb
+
 jobs:
 - name: compile_gpdb_centos6
   plan:
@@ -204,7 +211,7 @@ jobs:
     params:
       file: rc_bin_gpdb_rhel7/bin_gpdb.tar.gz
 
-- name: create_gpdb_tarball_ubuntu18.04
+- name: ubuntu18.04 packaging
   plan:
   - aggregate:
     - get: gpdb_src
@@ -223,9 +230,20 @@ jobs:
       rc_bin_gpdb: rc_bin_gpdb_ubuntu18.04
     params:
       QAUTILS_TARBALL: "rc_bin_gpdb/QAUtils-ubuntu18.04-amd64.tar.gz"
-  - put: bin_gpdb_ubuntu18.04
+  - task: create_gpdb_debian_package
+    file: gpdb_src/concourse/tasks/build_gpdb_debian.yml
+    image: gpdb6-ubuntu18.04-build
+    input_mapping:
+      bin_gpdb: rc_bin_gpdb_ubuntu18.04
     params:
-      file: rc_bin_gpdb_ubuntu18.04/bin_gpdb.tar.gz
+      PLATFORM: "ubuntu18.04"
+  - aggregate:
+    - put: bin_gpdb_ubuntu18.04
+      params:
+        file: rc_bin_gpdb_ubuntu18.04/bin_gpdb.tar.gz
+    - put: gpdb_debian_package
+      params:
+        file: gpdb_debian_installer/*.deb
 
 - name: release
   plan:
@@ -234,7 +252,7 @@ jobs:
       passed:
       - create_gpdb_tarball_centos6
       - create_gpdb_tarball_centos7
-      - create_gpdb_tarball_ubuntu18.04
+      - ubuntu18.04 packaging
     - get: bin_gpdb_centos6
       passed: [create_gpdb_tarball_centos6]
       trigger: true
@@ -242,8 +260,10 @@ jobs:
       passed: [create_gpdb_tarball_centos7]
       trigger: true
     - get: bin_gpdb_ubuntu18.04
-      passed: [create_gpdb_tarball_ubuntu18.04]
+      passed: [ubuntu18.04 packaging]
       trigger: true
+    - get: gpdb_debian_package
+      passed: [ubuntu18.04 packaging]
     - get: gpdb6-centos6-build
   - task: rename_gpdb_tarball
     config:
@@ -288,6 +308,8 @@ jobs:
       trigger: true
       passed: [release]
     - get: license_file
+    - get: gpdb_debian_package
+      passed: [release]
   - task: gpdb_github_release
     file: gpdb_src/concourse/tasks/gpdb_github_release.yml
   - put: gpdb_release
@@ -299,3 +321,4 @@ jobs:
         - release_artifacts/*.tar.gz
         - release_artifacts/*.zip
         - license_file/*.txt
+        - gpdb_debian_package/*.deb
